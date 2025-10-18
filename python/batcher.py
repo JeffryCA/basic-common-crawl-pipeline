@@ -28,7 +28,7 @@ def parse_args() -> argparse.Namespace:
         "--batch-size", type=int, help="Batch size", required=False, default=50
     )
     parser.add_argument(
-        "--max-batches", type=int, help="Max number of URLs", required=False, default=inf
+        "--max-batches", type=int, help="Max number of batches", required=False, default=inf
     )
     return parser.parse_args()
 
