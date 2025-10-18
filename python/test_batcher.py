@@ -1,6 +1,7 @@
 from batcher import process_index
 from commoncrawl import Downloader, IndexReader
 from rabbitmq import MessageQueueChannel
+from prometheus_client import CollectorRegistry, Counter
 
 
 class FakeReader(IndexReader):
@@ -91,3 +92,37 @@ def test_publish_all_urls():
     )
     process_index(reader, channel, downloader, 2)
     assert channel.num_called == 3
+
+
+def test_batcher_filtered_counters():
+    # Arrange
+    import batcher as batcher_mod
+    registry = CollectorRegistry()
+    batcher_mod.filtered_docs_counter = Counter(
+        "batcher_filtered_docs", "Number of filtered out documents (per reason)",
+        ["reason"], registry=registry
+    )
+    batcher_mod.rejected_docs_counter = Counter(
+        "batcher_rejected_docs", "Documents rejected by the batcher",
+        registry=registry
+    )
+    batcher_mod.batch_counter = Counter(
+        "batcher_batches", "Number of published batches",
+        registry=registry
+    )
+    reader = FakeReader(
+        [["0,100,22,165)/ 20240722120756", "cdx-00000.gz", "0", "188224", "1"]]
+    )
+    channel = ChannelSpy()
+    downloader = FakeDownloader(
+        '0,100,22,165)/ 20240722120756 {"url": "http://165.22.100.0/", "mime": "text/html", "mime-detected": "text/html", "status": "301", "languages": "eng", "digest": "DCNYNIFG5SBRCVS5PCUY4YY2UM2WAQ4R", "length": "689", "offset": "3499", "filename": "crawl-data/CC-MAIN-2024-30/segments/1720763517846.73/crawldiagnostics/CC-MAIN-20240722095039-20240722125039-00443.warc.gz", "redirect": "https://157.245.55.71/"}\n'
+        '0,100,22,165)/robots.txt 20240722120755 {"url": "http://165.22.100.0/robots.txt", "mime": "text/html", "mime-detected": "text/html", "status": "400", "languages": "de", "digest": "LYEE2BXON4MCQCP5FDVDNILOWBKCZZ6G", "length": "700", "offset": "4656", "filename": "crawl-data/CC-MAIN-2024-30/segments/1720763517846.73/robotstxt/CC-MAIN-20240722095039-20240722125039-00410.warc.gz", "redirect": "https://157.245.55.71/robots.txt"}'
+    )
+
+    # Act
+    process_index(reader, channel, downloader, batch_size=2)
+
+    # Test
+    assert batcher_mod.filtered_docs_counter.labels(reason="non_english")._value.get() == 1
+    assert batcher_mod.filtered_docs_counter.labels(reason="status_not_200")._value.get() == 2
+    assert batcher_mod.rejected_docs_counter._value.get() == 2

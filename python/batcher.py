@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
 import json
 import argparse
-from math import inf
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Optional, Sequence
 from prometheus_client import Counter, start_http_server
 
 from commoncrawl import (
@@ -17,6 +16,8 @@ from rabbitmq import QUEUE_NAME, MessageQueueChannel, RabbitMQChannel
 
 
 batch_counter = Counter("batcher_batches", "Number of published batches")
+filtered_docs_counter = Counter("batcher_filtered_docs", "Number of filtered out documents", ['reason'])
+rejected_docs_counter = Counter("batcher_rejected_docs", "Number of rejected documents")
 
 
 def parse_args() -> argparse.Namespace:
@@ -28,7 +29,7 @@ def parse_args() -> argparse.Namespace:
         "--batch-size", type=int, help="Batch size", required=False, default=50
     )
     parser.add_argument(
-        "--max-batches", type=int, help="Max number of batches", required=False, default=inf
+        "--max-batches", type=int, help="Max number of batches", required=False, default=None
     )
     return parser.parse_args()
 
@@ -51,7 +52,7 @@ def process_index(
     channel: MessageQueueChannel,
     downloader: Downloader,
     batch_size: int,
-    max_batches: int 
+    max_batches: Optional[int] = None
 ) -> None:
     found_urls = []
     published_batches = 0
@@ -64,28 +65,40 @@ def process_index(
                 continue
             values = line.split(" ")
             metadata = json.loads("".join(values[2:]))
-            if (
-                "languages" in metadata
-                and "eng" in metadata["languages"]
-                and metadata["status"] == "200"
-            ):
-                found_urls.append(
-                    {
-                        "surt_url": values[0],
-                        "timestamp": values[1],
-                        "metadata": metadata,
-                    }
-                )
+
+            # Filtering criteria
+            is_eng = "languages" in metadata and "eng" in metadata["languages"]
+            is_status_200 = metadata.get("status") == "200"
+
+            reasons = []
+            if not is_eng:
+                reasons.append("non_english")
+            if not is_status_200:
+                reasons.append("status_not_200")
+            if reasons:
+                for reason in reasons:
+                    filtered_docs_counter.labels(reason=reason).inc()
+                rejected_docs_counter.inc()
+                continue
+
+            # If passed all filters, add to batch
+            found_urls.append(
+                {
+                    "surt_url": values[0],
+                    "timestamp": values[1],
+                    "metadata": metadata,
+                }
+            )
             if len(found_urls) >= batch_size:
                 publish_batch(channel, found_urls)
                 found_urls = []
                 published_batches += 1
 
-            if published_batches >= max_batches:
+            if max_batches and published_batches >= max_batches:
                 print("Early stopping")
                 return
 
-    if len(found_urls) > 0 and published_batches < max_batches:
+    if len(found_urls) > 0 and (max_batches is None or published_batches < max_batches):
         publish_batch(channel, found_urls)
 
 
