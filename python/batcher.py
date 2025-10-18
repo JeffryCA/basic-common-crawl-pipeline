@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import json
 import argparse
+from math import inf
 from typing import Any, Mapping, Sequence
 from prometheus_client import Counter, start_http_server
 
@@ -15,8 +16,6 @@ from commoncrawl import (
 from rabbitmq import QUEUE_NAME, MessageQueueChannel, RabbitMQChannel
 
 
-BATCH_SIZE = 50
-
 batch_counter = Counter("batcher_batches", "Number of published batches")
 
 
@@ -24,6 +23,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Batcher")
     parser.add_argument(
         "--cluster-idx-filename", type=str, help="Input file path", required=True
+    )
+    parser.add_argument(
+        "--batch-size", type=int, help="Batch size", required=False, default=50
+    )
+    parser.add_argument(
+        "--max-batches", type=int, help="Max number of URLs", required=False, default=inf
     )
     return parser.parse_args()
 
@@ -46,8 +51,10 @@ def process_index(
     channel: MessageQueueChannel,
     downloader: Downloader,
     batch_size: int,
+    max_batches: int 
 ) -> None:
     found_urls = []
+    published_batches = 0
     for cdx_chunk in index:
         data = downloader.download_and_unzip(
             cdx_chunk[1], int(cdx_chunk[2]), int(cdx_chunk[3])
@@ -72,8 +79,13 @@ def process_index(
             if len(found_urls) >= batch_size:
                 publish_batch(channel, found_urls)
                 found_urls = []
+                published_batches += 1
 
-    if len(found_urls) > 0:
+            if published_batches >= max_batches:
+                print("Early stopping")
+                return
+
+    if len(found_urls) > 0 and published_batches < max_batches:
         publish_batch(channel, found_urls)
 
 
@@ -83,7 +95,7 @@ def main() -> None:
     channel = RabbitMQChannel()
     downloader = CCDownloader(f"{BASE_URL}/{CRAWL_PATH}")
     index_reader = CSVIndexReader(args.cluster_idx_filename)
-    process_index(index_reader, channel, downloader, BATCH_SIZE)
+    process_index(index_reader, channel, downloader, args.batch_size, args.max_batches)
 
 
 if __name__ == "__main__":
