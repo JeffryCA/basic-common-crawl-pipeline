@@ -132,6 +132,22 @@ For this to work, you need to export this:
 export RABBITMQ_CONNECTION_STRING=amqp://localhost:<PORT>
 ```
 
+### Prepare MinIO server
+
+Start the server like this:
+
+```bash
+docker run -d --name minio \
+  -p 19000:9000 -p 19001:9001 \
+  -e MINIO_ROOT_USER=admin -e MINIO_ROOT_PASSWORD=12345678 \
+  minio/minio server /data --console-address ":9001"
+```
+
+S3 endpoint: http://localhost:19000
+Console:     http://localhost:19001
+
+Open the S3 endpoint and create a bucket named `commoncrawl`.
+
 ### Install and start metrics server
 
 ```bash
