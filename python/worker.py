@@ -11,7 +11,7 @@ from rabbitmq import QUEUE_NAME, rabbitmq_channel
 
 batch_counter = Counter("worker_batches", "Number of consumed batches")
 filtered_docs_counter = Counter("worker_filtered_docs", "Number of filtered out documents")
-
+processed_docs_counter = Counter("worker_processed_docs", "Number of processed documents")
 
 def process_batch(downloader: Downloader, ch, method, _properties, body):
     print("Received batch of size", len(body))
@@ -25,11 +25,12 @@ def process_batch(downloader: Downloader, ch, method, _properties, body):
         has_text = False
         for record in WARCIterator(io.BytesIO(data)):
             if record.rec_type == "response":
-                _text = trafilatura.extract(record.content_stream().read())
-                has_text = bool(_text)
-                # TODO: process text
-                # Assume one record per item
-                break
+                text = trafilatura.extract(record.content_stream().read())
+                if text and text.strip():
+                    # TODO: process text
+                    processed_docs_counter.inc()   
+                    has_text = True
+                    break # Assume one response per WARC record
 
         if not has_text: 
             filtered_docs_counter.inc()
