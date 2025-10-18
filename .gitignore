@@ -3,3 +3,6 @@ target
 .autometrics
 venv
 cluster.idx
+__pycache__
+.DS_Store
+.venv
