@@ -132,7 +132,7 @@ For this to work, you need to export this:
 export RABBITMQ_CONNECTION_STRING=amqp://localhost:<PORT>
 ```
 
-### Prepare MinIO server
+### Prepare MinIO server (local)
 
 Start the server like this:
 
@@ -147,6 +147,9 @@ S3 endpoint: http://localhost:19000
 Console:     http://localhost:19001
 
 Open the S3 endpoint and create a bucket named `commoncrawl`.
+
+If you want to use a different S3-compatible object store, you can need to adjust the `.env` file accordingly.
+
 
 ### Install and start metrics server
 
@@ -231,8 +234,8 @@ This section summarizes some coding challenges that you might want to try to imp
 - Batcher and worker:
   - [x] Add Prometheus counters that track how many documents we are filtering at every stage. This can be done both in the batcher and in the worker.
 - Worker:
-  - [ ] Write the extracted and filtered document content to an object store. It should be possible to pass the address of the object store bucket to the worker. If you don't already have an object store bucket lying around, you can spin up a `minio/minio` container for that and pass the object store address to the worker. Which file format would you use to store the entries on the object store?
-  - [ ] Add tokenization so that we already have tokenized data ready for training on the object store. The Huggingface tokenizers library might be a good starting point.
+  - [x] Write the extracted and filtered document content to an object store. It should be possible to pass the address of the object store bucket to the worker. If you don't already have an object store bucket lying around, you can spin up a `minio/minio` container for that and pass the object store address to the worker. Which file format would you use to store the entries on the object store?
+  - [x] Add tokenization so that we already have tokenized data ready for training on the object store. The Huggingface tokenizers library might be a good starting point.
   - [ ] Add some metrics so that we know how much data we are currently downloading and how many batches we have already processed and how many documents we have already processed
   - [ ] (Rust only) Can performance be improved by leveraging the tokio async runtime, maybe even using multiple threads if necessary?
   - [ ] Add a filter that makes sure that documents are at least 500 characters long and at most 1,000,000 characters long
