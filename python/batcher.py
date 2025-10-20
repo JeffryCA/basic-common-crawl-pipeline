@@ -1,7 +1,7 @@
 import json
 import argparse
 from typing import Any, Mapping, Optional, Sequence
-from prometheus_client import Counter, start_http_server, write_to_textfile, REGISTRY
+from prometheus_client import Counter, Gauge, start_http_server, write_to_textfile, REGISTRY
 
 from commoncrawl import (
     BASE_URL,
@@ -17,7 +17,7 @@ from rabbitmq import QUEUE_NAME, MessageQueueChannel, RabbitMQChannel
 batch_counter = Counter("batcher_batches", "Number of published batches")
 filtered_docs_counter = Counter("batcher_filtered_docs", "Number of filtered out documents", ['reason'])
 rejected_docs_counter = Counter("batcher_rejected_docs", "Number of rejected documents")
-
+cluster_progress_gauge = Gauge("batcher_cluster_progress", "Progress. % of cluster processed")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Batcher")
@@ -51,11 +51,15 @@ def process_index(
     channel: MessageQueueChannel,
     downloader: Downloader,
     batch_size: int,
+    total_cluster_chunks: int,
     max_batches: Optional[int] = None
 ) -> None:
     found_urls = []
     published_batches = 0
+    processed_chunks = 0
     for cdx_chunk in index:
+        processed_chunks += 1
+        cluster_progress_gauge.set(processed_chunks / total_cluster_chunks)
         data = downloader.download_and_unzip(
             cdx_chunk[1], int(cdx_chunk[2]), int(cdx_chunk[3])
         ).decode("utf-8")
@@ -104,11 +108,14 @@ def process_index(
 def main() -> None:
     args = parse_args()
     start_http_server(9000)
+    with open(args.cluster_idx_filename, "r", encoding="utf-8") as f:
+        total_cluster_chunks = sum(1 for line in f if line.strip())
+    cluster_progress_gauge.set(0.0)
     channel = RabbitMQChannel()
     downloader = CCDownloader(f"{BASE_URL}/{CRAWL_PATH}")
     index_reader = CSVIndexReader(args.cluster_idx_filename)
     try:
-        process_index(index_reader, channel, downloader, args.batch_size, args.max_batches)
+        process_index(index_reader, channel, downloader, args.batch_size, total_cluster_chunks,  args.max_batches)
     finally:
         write_to_textfile("./temp/batcher_metrics.txt", REGISTRY)
 

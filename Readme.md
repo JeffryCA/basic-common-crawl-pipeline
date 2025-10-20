@@ -243,7 +243,7 @@ This section summarizes some coding challenges that you might want to try to imp
   - [ ] Make it possible to pass the version of the crawl as an argument. Currently, it is hardcoded to CC-MAIN-2024-30.
   - [ ] (Rust only) Can we get rid of the `collect` in the batcher that collects the filtered `CdxEntry`s?
   - [ ] Put in some error handling when publishing a batch to RabbitMQ. Can we recover from network issues or timeouts?
-  - [ ] Add some monitoring for the batcher so that we know which percentage of the cluster.idx file has already been processed and so that we know how many batches have already been pushed
+  - [x] Add some monitoring for the batcher so that we know which percentage of the cluster.idx file has already been processed and so that we know how many batches have already been pushed
   - [ ] Allow support for providing multiple crawls that can be processed by the batcher. This feature allows us to collect more data than would be available from a single crawl. But notice that this feature is only useful if we can make sure that we only download the content of every URL only once. Notice that a URL might show up in multiple crawls over time.
 
 ## Learning resources if you are new to Rust
