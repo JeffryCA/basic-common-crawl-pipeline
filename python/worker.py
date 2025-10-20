@@ -18,7 +18,7 @@ from rabbitmq import QUEUE_NAME, rabbitmq_channel
 batch_counter = Counter("worker_batches", "Number of consumed batches")
 filtered_docs_counter = Counter("worker_filtered_docs", "Number of filtered out documents", ["reason"])
 processed_docs_counter = Counter("worker_processed_docs", "Number of processed documents")
-
+downloaded_bytes_counter = Counter("worker_downloaded_bytes", "Number of downloaded bytes")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Worker")
@@ -76,6 +76,7 @@ def process_batch(downloader: Downloader, ch, method, _properties, body, writer 
             int(item["metadata"]["offset"]),
             int(item["metadata"]["length"]),
         )
+        downloaded_bytes_counter.inc(int(item["metadata"]["length"]))
         has_text = False
         for record in WARCIterator(io.BytesIO(data)):
             if record.rec_type == "response":
