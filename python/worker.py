@@ -43,7 +43,9 @@ def get_tokenizer() -> AutoTokenizer:
 
 def process_sample(item, text, tok: AutoTokenizer, writer: ShardWriter) -> None:
     # text -> token ids
-    ids = tok.encode(text.strip(), add_special_tokens=False) # TODO: split into sequences of max length
+    ids = tok.encode(text.strip(), add_special_tokens=False) 
+    ids.append(tok.eos_token_id)
+    # TODO: split into sequences of max length
     # tokens -> .npy bytes (uint32)
     arr = np.asarray(ids, dtype=np.uint32)
     tokens_buf = io.BytesIO()
