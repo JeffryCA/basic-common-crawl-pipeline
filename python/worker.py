@@ -7,7 +7,7 @@ from prometheus_client import start_http_server
 import trafilatura
 from transformers import AutoTokenizer
 from warcio.archiveiterator import WARCIterator
-from prometheus_client import Counter
+from prometheus_client import Counter, write_to_textfile, REGISTRY
 
 from commoncrawl import BASE_URL, CCDownloader, Downloader
 from object_store import ensure_bucket_exists
@@ -112,6 +112,7 @@ def main() -> None:
         channel.start_consuming()
     finally:
         writer.flush()
+        write_to_textfile("./temp/worker_metrics.txt", REGISTRY)
 
 
 if __name__ == "__main__":

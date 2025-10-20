@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import json
 import argparse
 from typing import Any, Mapping, Optional, Sequence
-from prometheus_client import Counter, start_http_server
+from prometheus_client import Counter, start_http_server, write_to_textfile, REGISTRY
 
 from commoncrawl import (
     BASE_URL,
@@ -108,7 +108,10 @@ def main() -> None:
     channel = RabbitMQChannel()
     downloader = CCDownloader(f"{BASE_URL}/{CRAWL_PATH}")
     index_reader = CSVIndexReader(args.cluster_idx_filename)
-    process_index(index_reader, channel, downloader, args.batch_size, args.max_batches)
+    try:
+        process_index(index_reader, channel, downloader, args.batch_size, args.max_batches)
+    finally:
+        write_to_textfile("./temp/batcher_metrics.txt", REGISTRY)
 
 
 if __name__ == "__main__":
