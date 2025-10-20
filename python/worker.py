@@ -16,7 +16,7 @@ from rabbitmq import QUEUE_NAME, rabbitmq_channel
 
 
 batch_counter = Counter("worker_batches", "Number of consumed batches")
-filtered_docs_counter = Counter("worker_filtered_docs", "Number of filtered out documents")
+filtered_docs_counter = Counter("worker_filtered_docs", "Number of filtered out documents", ["reason"])
 processed_docs_counter = Counter("worker_processed_docs", "Number of processed documents")
 
 
@@ -40,6 +40,31 @@ def get_tokenizer() -> AutoTokenizer:
         tok.pad_token = tok.eos_token
     return tok
 
+def process_sample(item, text, tok: AutoTokenizer, writer: ShardWriter) -> None:
+    # text -> token ids
+    ids = tok.encode(text.strip(), add_special_tokens=False) # TODO: split into sequences of max length
+    # tokens -> .npy bytes (uint32)
+    arr = np.asarray(ids, dtype=np.uint32)
+    tokens_buf = io.BytesIO()
+    np.save(tokens_buf, arr, allow_pickle=False) # prevent potential malicious code from being executed when loading data
+    tokens_payload = tokens_buf.getvalue()
+    # Save some metadata
+    meta = {
+        "tokenizer": {"name": tok.name_or_path, "eos_id": tok.eos_token_id},
+        "num_tokens": int(arr.size),
+        "source": "commoncrawl",
+        "crawl": item["metadata"]["filename"],
+        "offset": int(item["metadata"]["offset"]),
+        "length": int(item["metadata"]["length"]),
+        "lang": "en",
+        # TODO add document hash of normalized text
+    }
+    meta_payload = json.dumps(meta, ensure_ascii=False).encode("utf-8")
+    # Write sample to tar
+    writer.add_sample(tokens_payload, meta_payload)
+    # Update counter
+    processed_docs_counter.inc()   
+
 def process_batch(downloader: Downloader, ch, method, _properties, body, writer : ShardWriter) -> None:
     print("Received batch of size", len(body))
     batch = json.loads(body)
@@ -55,35 +80,17 @@ def process_batch(downloader: Downloader, ch, method, _properties, body, writer 
             if record.rec_type == "response":
                 text = trafilatura.extract(record.content_stream().read())
                 if text and text.strip():
-                    # text -> token ids
-                    ids = tok.encode(text.strip(), add_special_tokens=False) # TODO: split into sequences of max length
-                    # tokens -> .npy bytes (uint32)
-                    arr = np.asarray(ids, dtype=np.uint32)
-                    tokens_buf = io.BytesIO()
-                    np.save(tokens_buf, arr, allow_pickle=False) # prevent potential malicious code from being executed when loading data
-                    tokens_payload = tokens_buf.getvalue()
-                    # Save some metadata
-                    meta = {
-                        "tokenizer": {"name": tok.name_or_path, "eos_id": tok.eos_token_id},
-                        "num_tokens": int(arr.size),
-                        "source": "commoncrawl",
-                        "crawl": item["metadata"]["filename"],
-                        "offset": int(item["metadata"]["offset"]),
-                        "length": int(item["metadata"]["length"]),
-                        "lang": "en",
-                        # TODO add document hash of normalized text
-                    }
-                    meta_payload = json.dumps(meta, ensure_ascii=False).encode("utf-8")
-                    # Write sample to tar
-                    writer.add_sample(tokens_payload, meta_payload)
-                    # Update counter
-                    processed_docs_counter.inc()   
                     has_text = True
+                    print("Extracted text of length", len(text))
+                    if not (500 <= len(text) <= 1_000_000):
+                        filtered_docs_counter.labels(reason="invalid_length").inc()
+                        break
+                    process_sample(item, text, tok, writer)
                     break  # Assume one response per WARC record
 
         # Update counter
         if not has_text: 
-            filtered_docs_counter.inc()
+            filtered_docs_counter.labels(reason="no_text").inc()
 
     batch_counter.inc()
     ch.basic_ack(delivery_tag=method.delivery_tag)

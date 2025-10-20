@@ -238,7 +238,7 @@ This section summarizes some coding challenges that you might want to try to imp
   - [x] Add tokenization so that we already have tokenized data ready for training on the object store. The Huggingface tokenizers library might be a good starting point.
   - [ ] Add some metrics so that we know how much data we are currently downloading and how many batches we have already processed and how many documents we have already processed
   - [ ] (Rust only) Can performance be improved by leveraging the tokio async runtime, maybe even using multiple threads if necessary?
-  - [ ] Add a filter that makes sure that documents are at least 500 characters long and at most 1,000,000 characters long
+  - [x] Add a filter that makes sure that documents are at least 500 characters long and at most 1,000,000 characters long
 - Batcher:
   - [ ] Make it possible to pass the version of the crawl as an argument. Currently, it is hardcoded to CC-MAIN-2024-30.
   - [ ] (Rust only) Can we get rid of the `collect` in the batcher that collects the filtered `CdxEntry`s?
