@@ -81,7 +81,6 @@ def process_batch(downloader: Downloader, ch, method, _properties, body, writer 
                 text = trafilatura.extract(record.content_stream().read())
                 if text and text.strip():
                     has_text = True
-                    print("Extracted text of length", len(text))
                     if not (500 <= len(text) <= 1_000_000):
                         filtered_docs_counter.labels(reason="invalid_length").inc()
                         break
