@@ -36,6 +36,7 @@ def parse_args() -> argparse.Namespace:
 
 def get_tokenizer() -> AutoTokenizer:
     tok = AutoTokenizer.from_pretrained("gpt2") # In general choose a tokenizer suited for target model task (finetune / train) and language
+    tok.model_max_length = int(1e12) # Suppress warnings about long sequences
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
     return tok
